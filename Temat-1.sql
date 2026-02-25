@@ -60,7 +60,7 @@ end;
 
 
 -- zadanie 3
-create package pack_;
+-- create package pack_;
 
 create or replace procedure proc_zip_insert is
         cursor c_zip is
