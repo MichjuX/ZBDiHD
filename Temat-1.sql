@@ -16,10 +16,13 @@ create table sale(
     id_sale number(8) primary key,
     id_zip number(5) not null,
     id_time number(5) not null,
+    sale number(5),
 
     foreign key (id_zip) references zip(id_zip),
     foreign key (id_time) references time(id_time)
 );
+
+drop table sale;
 
 create table profit_by_state(
     state varchar2(2) primary key,
@@ -62,11 +65,12 @@ end;
 -- zadanie 3
 -- create package pack_;
 
+-- dla zipa
 create or replace procedure proc_zip_insert is
         cursor c_zip is
             select distinct zip, state
             from customers
-            order by state, zip;
+            order by state, zip; -- opcjonalnie order by
 
     begin
 --         for each row c_zip insert into zip(zipcode, state) values
@@ -79,8 +83,73 @@ begin
 proc_zip_insert;
 end;
 
-select distinct zip, state
-from customers
-order by state, zip; -- opcjonalnie order by
+-- dla time
+create or replace procedure proc_time_insert is
+    cursor c_time is
+        select distinct extract(month from orderdate) as month,
+                        extract(year from orderdate) as year
+        from orders
+        order by 2, 1;
+begin
+    for i in c_time loop
+            insert into time(month, year) values (i.month, i.year);
+        end loop;
+end;
+
+select distinct extract(month from orderdate) as month,
+                extract(year from orderdate) as year
+from orders
+order by 2, 1;
 
 commit;
+
+begin
+    proc_time_insert();
+end;
+-- dla sale
+-- create procedure proc_sale_insert is
+--     cursor c_sale is
+select * from time;
+
+
+create or replace procedure proc_sale_insert is
+    cursor c_sale is
+        select z.id_zip, t.id_time, sum(b.retail*oi.quantity) as sale
+        -- from zip z, time t, books b, orderitems oi, orders o, customers c
+        from zip z join customers c on c.zip=z.zipcode and c.STATE=z.STATE
+        join orders o on o.CUSTOMER#=c.CUSTOMER#
+        join orderitems oi on o.ORDER#=oi.ORDER#
+        join books b on b.ISBN=oi.ISBN
+        join time t on t.month=extract(month from o.ORDERDATE) and t.year=extract(year from o.ORDERDATE)
+        group by z.id_zip, t.id_time;
+begin
+    for i in c_sale loop
+        insert into sale(id_zip, id_time, sale) values (i.id_zip, i.id_time, i.sale);
+        end loop;
+end;
+
+begin
+    proc_sale_insert();
+end;
+
+commit;
+truncate table sale;
+truncate table time;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
