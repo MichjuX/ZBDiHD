@@ -63,6 +63,14 @@ end;
 
 
 -- zadanie 3
+-- Utwórz pakiet składający się z następujących elementów:
+-- (a) procedury, która w oparciu o tabele ze schematu zamieszczonego w Dodatku, przepisze odpowiednio
+-- dane do tabel utworzonych w Zadaniu 1. Wartość sprzedaży w tabeli Sale powinna być wyznaczana w
+-- oparciu o pola retail i quantity. Z kolei wartość kolumn miesiąc i rok w tabeli Time powinny
+-- być wyznaczone w oparciu o pole orderdate z tabeli Orders. Uwaga: pamiętaj o wykorzystaniu
+-- sekwencji do generowania kluczy głównych tabel;
+
+
 -- create package pack_;
 
 -- dla zipa
@@ -135,6 +143,37 @@ end;
 commit;
 truncate table sale;
 truncate table time;
+
+-- (b) funkcji, która dla danego stanu (parametr wejściowy funkcji) wyznaczy wartość zysku ze sprzedaży.
+-- Jeśli parametr wejściowy będzie opisywał stan, który nie występuje w bazie, wówczas funkcja powinna
+-- zwrócić NULL;
+
+create or replace function fun_calc_sale(f_state CUSTOMERS.STATE%type)
+    return number is f_sale number;
+begin
+    select sum(RETAIL*QUANTITY) into f_sale
+    from customers c join orders o on c.CUSTOMER#=o.CUSTOMER#
+                     join orderitems oi on oi.ORDER#=o.ORDER#
+                     join books b on b.ISBN=oi.ISBN
+    where c.STATE=f_state;
+
+    return f_sale;
+exception
+    when NO_DATA_FOUND then
+        return null;
+end;
+
+select fun_calc_sale('FL')
+from dual;
+
+-- (c) procedury, która załaduje do tabeli PROFIT_BY_STATE dane w oparciu o funkcję
+-- zaimplementowaną w podpunkcie (b). Do tabeli powinny być dopisane stany, z których pochodzą klienci
+-- (Customers.state) oraz zysk. Wiersz do tabeli PROFIT_BY_STATE powinien być dopisany tylko wtedy,
+-- jeśli zysk ma wartość określoną (nie jest NULL).
+-- Wywołaj procedury i funkcję pakietu.
+
+
+
 
 
 
