@@ -172,6 +172,145 @@ from dual;
 -- jeśli zysk ma wartość określoną (nie jest NULL).
 -- Wywołaj procedury i funkcję pakietu.
 
+create or replace procedure proc_pbs_insert is
+--     cursor c_pbs is
+--         select fun_calc_sale(f_state) from dual;
+    cursor c_states is
+        select distinct state from SIENKIEWICZ_MICHAL.CUSTOMERS;
+    v_sale number;
+begin
+
+     for i in c_states loop
+         v_sale := fun_calc_sale(i.STATE);
+
+         if v_sale is not null then
+             insert into PROFIT_BY_STATE (state, profit) values (i.STATE, v_sale);
+         end if;
+
+    end loop;
+end;
+
+begin
+    proc_pbs_insert();
+end;
+
+commit;
+
+
+-- FINALNY PAKIET DO ZADANIA 3
+
+create or replace package pack_sales as
+    procedure proc_zip_insert;
+    procedure proc_time_insert;
+    procedure proc_sale_insert;
+
+    function proc_pbs_insert(f_state customers.STATE%type) return number;
+
+    procedure pack_sales_run_all;
+
+end pack_sales;
+
+create or replace package body pack_sales as
+
+    procedure proc_zip_insert is
+        cursor c_zip is
+            select distinct zip, state
+            from customers
+            order by state, zip; -- opcjonalnie order by
+
+    begin
+        --         for each row c_zip insert into zip(zipcode, state) values
+        for i in c_zip loop
+                insert into zip(state, zipcode) values (i.state, i.zip);
+            end loop;
+    end;
+
+    procedure proc_time_insert is
+        cursor c_time is
+            select distinct extract(month from orderdate) as month,
+                            extract(year from orderdate) as year
+            from orders
+            order by 2, 1;
+    begin
+        for i in c_time loop
+                insert into time(month, year) values (i.month, i.year);
+            end loop;
+    end;
+
+    procedure proc_sale_insert is
+        cursor c_sale is
+            select z.id_zip, t.id_time, sum(b.retail*oi.quantity) as sale
+            -- from zip z, time t, books b, orderitems oi, orders o, customers c
+            from zip z join customers c on c.zip=z.zipcode and c.STATE=z.STATE
+                       join orders o on o.CUSTOMER#=c.CUSTOMER#
+                       join orderitems oi on o.ORDER#=oi.ORDER#
+                       join books b on b.ISBN=oi.ISBN
+                       join time t on t.month=extract(month from o.ORDERDATE) and t.year=extract(year from o.ORDERDATE)
+            group by z.id_zip, t.id_time;
+    begin
+        for i in c_sale loop
+                insert into sale(id_zip, id_time, sale) values (i.id_zip, i.id_time, i.sale);
+            end loop;
+    end;
+
+    function fun_calc_sale(f_state CUSTOMERS.STATE%type)
+        return number is f_sale number;
+    begin
+        select sum(RETAIL*QUANTITY) into f_sale
+        from customers c join orders o on c.CUSTOMER#=o.CUSTOMER#
+                         join orderitems oi on oi.ORDER#=o.ORDER#
+                         join books b on b.ISBN=oi.ISBN
+        where c.STATE=f_state;
+
+        return f_sale;
+    exception
+        when NO_DATA_FOUND then
+            return null;
+    end;
+
+    procedure proc_pbs_insert is
+    --     cursor c_pbs is
+    --         select fun_calc_sale(f_state) from dual;
+        cursor c_states is
+    select distinct state from SIENKIEWICZ_MICHAL.CUSTOMERS;
+    v_sale number;
+    begin
+
+        for i in c_states loop
+                v_sale := fun_calc_sale(i.STATE);
+
+                if v_sale is not null then
+                    insert into PROFIT_BY_STATE (state, profit) values (i.STATE, v_sale);
+                end if;
+
+            end loop;
+    end;
+
+    procedure pack_sales_run_all is
+    begin
+        proc_zip_insert();
+        proc_time_insert();
+        proc_sale_insert();
+        proc_pbs_insert();
+        commit;
+    end;
+end pack_sales;
+
+-- Zadanie 4
+-- Utwórz wyzwalacz, który będzie kontrolował wartości kolumn retail i cost w tabeli books.
+-- Wyzwalacz powinien się uruchamiać w momencie modyfikacji wartości tych kolumn, jak również przy
+-- dodawaniu rekordu do tabeli books. Wartość w kolumnie retail powinna być co najwyżej dwa razy
+-- wyższa niż wartość kolumny cost. Np. jeśli wartość retail wynosi 10, a wartość cost wynosi 4
+-- wówczas wyzwalacz powinien zmienić wartość retail na wartość równą 8.
+
+create or replace trigger t_control_books
+before
+insert or update of retail, cost on BOOKS
+begin
+    if :new.retail > 2*:new.cost then
+        :new.retail := 2*new.COST;
+    end if;
+end;
 
 
 
