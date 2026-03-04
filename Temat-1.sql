@@ -54,6 +54,8 @@ create or replace trigger t_set_id_time
         :new.id_time:=seq_id_time.nextval;
     end;
 
+-- dla zip
+
 -- dla sale
 create trigger t_set_id_sale
 before insert on sale for each row
