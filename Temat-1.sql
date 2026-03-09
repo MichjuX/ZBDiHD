@@ -315,6 +315,14 @@ begin
 end;
 
 
+-- Ćwiczenie sobie funkcji
+
+create function fun_saleByYear (f_clientId customers.CUSTOMER#%type, f_year date )
+    return number is f_amount number;
+    begin
+
+    end;
+
 
 
 

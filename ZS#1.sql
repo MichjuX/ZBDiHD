@@ -83,6 +83,7 @@ create or replace trigger t_set_id_products
         :new.id_product:=seq_prod.nextval;
     end;
 
+
 -- Zadanie 4
 -- Napisz pakiet, który będzie się składał z następujących podprogramów:
 -- (a) procedury (lub procedur), która z tabeli TEMP przepisze odpowiednio dane do tabel utworzonych w Zadaniu 2.
@@ -93,13 +94,23 @@ create or replace trigger t_set_id_products
 -- (b) dwóch dowolnych funkcji, które powinny być zaimplementowane w oparciu o tabele utworzone w Zadaniu 2.
 -- Funkcje nie powinny odwoływać się do danych z tabeli TEMP.
 
+drop package pack_zs1;
 create or replace package pack_zs1 as
+    procedure proc_insert_all;
 
+    function fun_get_order_count_by_customer(f_id_customer zs1_customers.ID_CUSTOMER%type)
+    return number;
+
+    function fun_get_order_total(f_id_order zs1_orders.ID_ORDER%type)
+    return number;
 end pack_zs1;
 
-declare
+create or replace package body pack_zs1 as
+
+procedure proc_insert_all is
     cursor c1 is
-        select CUSTOMERNAME,
+        -- customerzy
+        select distinct CUSTOMERNAME,
                PHONE,
                ADDRESSLINE1,
                ADDRESSLINE2,
@@ -112,10 +123,44 @@ declare
                CONTACTFIRSTNAME
         from TEMP;
 
-        type NameSet is table of c1%rowtype;
-        customers NameSet;
+        type CustomerSet is table of c1%rowtype;
+        c_customers CustomerSet;
+
+        -- produkty
+        cursor c2 is
+            select distinct t.PRODUCTCODE, t.PRODUCTLINE, t.MSRP
+            from temp t;
+
+        type ProdSet is table of c2%rowtype;
+        c_products ProdSet;
+
+        -- ordery
+        cursor c3 is
+            select distinct ordernumber, orderdate, status, qtr_id, month_id, year_id, id_customer
+            from temp t join zs1_customers c on t.CUSTOMERNAME = c.customername;
+
+        type OrderSet is table of c3%rowtype;
+        c_orders OrderSet;
+
+        -- order_details
+        cursor c4 is
+            select distinct id_order,
+                            id_product,
+                            quantityordered,
+                            priceeach,
+                            orderlinenumber,
+                            sales,
+                            dealsize
+            from TEMP t join zs1_orders o on t.ORDERNUMBER = o.ORDERNUMBER
+                        join zs1_products p on t.PRODUCTCODE = p.productcode;
+
+        type OrderDetailsSet is table of c4%rowtype;
+        c_orderDetails OrderDetailsSet;
+
     begin
-    select CUSTOMERNAME,
+
+    --customerzy
+    select distinct CUSTOMERNAME,
                PHONE,
                ADDRESSLINE1,
                ADDRESSLINE2,
@@ -126,8 +171,167 @@ declare
                TERRITORY,
                CONTACTLASTNAME,
                CONTACTFIRSTNAME
-    from TEMP
-    where 
+    bulk collect into c_customers
+    from TEMP t
+    where not exists(select 1 from zs1_customers c where c.customername = t.CUSTOMERNAME);
+
+    forall i in 1..c_customers.count
+        insert into zs1_customers(customername,
+                                  phone,
+                                  addressline1,
+                                  addressline2,
+                                  city,
+                                  state,
+                                  postalcode,
+                                  country,
+                                  territory,
+                                  contactlastname,
+                                  contactfirstname) values (c_customers(i).customername,
+                                                            c_customers(i).phone,
+                                                            c_customers(i).addressline1,
+                                                            c_customers(i).addressline2,
+                                                            c_customers(i).city,
+                                                            c_customers(i).state,
+                                                            c_customers(i).postalcode,
+                                                            c_customers(i).country,
+                                                            c_customers(i).territory,
+                                                            c_customers(i).contactlastname,
+                                                            c_customers(i).contactfirstname);
+
+    -- produkty
+    select distinct productcode, productline, msrp
+        bulk collect into c_products
+    from temp t
+    where not exists(select 1 from zs1_products p where p.productcode = t.PRODUCTCODE);
+
+    forall i in c_products.first..c_products.last
+        insert into zs1_products(productcode, productline, msrp) values (c_products(i).PRODUCTCODE,
+                                                                         c_products(i).PRODUCTLINE,
+                                                                         c_products(i).MSRP);
+
+    -- ordery
+    select distinct t.ordernumber, t.orderdate, t.status, t.qtr_id, t.month_id, t.year_id, c.id_customer
+        bulk collect into c_orders
+    from temp t join zs1_customers c on t.CUSTOMERNAME = c.CUSTOMERNAME
+    where not exists(select 1 from zs1_orders o where o.ordernumber = t.ORDERNUMBER);
+
+    forall i in 1..c_orders.COUNT
+        insert into zs1_orders (ordernumber, orderdate, status, qtr_id, month_id, year_id, id_customer)
+            values (c_orders(i).ORDERNUMBER,
+                    c_orders(i).ORDERDATE,
+                    c_orders(i).STATUS,
+                    c_orders(i).QTR_ID,
+                    c_orders(i).MONTH_ID,
+                    c_orders(i).YEAR_ID,
+                    c_orders(i).id_customer
+                    );
+
+    -- order_details
+    select distinct id_order,
+                    id_product,
+                    quantityordered,
+                    priceeach,
+                    orderlinenumber,
+                    sales,
+                    dealsize
+        bulk collect into c_orderDetails
+    from TEMP t join zs1_orders o on t.ORDERNUMBER = o.ORDERNUMBER
+                join zs1_products p on t.PRODUCTCODE = p.productcode
+    where not exists(select 1 from zs1_order_details od
+                              where od.id_order = o.id_order
+                              and od.orderlinenumber = t.ORDERLINENUMBER);
+
+    SELECT o.id_order,
+           p.id_product,
+           t.quantityordered,
+           t.priceeach,
+           t.orderlinenumber,
+           t.sales,
+           t.dealsize
+        BULK COLLECT INTO c_orderDetails
+    FROM temp t
+             JOIN zs1_orders o ON t.ordernumber = o.ordernumber
+             JOIN zs1_products p ON t.productcode = p.productcode
+    WHERE NOT EXISTS (
+        SELECT 1 FROM zs1_order_details od
+        WHERE od.id_order = o.id_order
+          AND od.orderlinenumber = t.orderlinenumber -- Sprawdzamy linię w zamówieniu
+    );
+
+    forall i in 1..c_orderDetails.COUNT
+        insert into zs1_order_details (id_order, id_product, quantityordered, priceeach, orderlinenumber, sales, dealsize)
+        values (c_orderDetails(i).id_order,
+                c_orderDetails(i).id_product,
+                c_orderDetails(i).QUANTITYORDERED,
+                c_orderDetails(i).PRICEEACH,
+                c_orderDetails(i).ORDERLINENUMBER,
+                c_orderDetails(i).SALES,
+                c_orderDetails(i).DEALSIZE
+                );
+
+    commit;
+
+    end;
+
+    function fun_get_order_count_by_customer(f_id_customer zs1_customers.ID_CUSTOMER%type)
+        return number is f_count number;
+    begin
+        select count(*)
+        into f_count
+        from zs1_orders o
+        where o.id_customer = f_id_customer;
+
+        return f_count;
+    end;
+
+    function fun_get_order_total(f_id_order zs1_orders.ID_ORDER%type)
+        return number is f_sum number;
+    begin
+        select sum(QUANTITYORDERED*priceeach)
+        into f_sum
+        from zs1_order_details
+        where id_order = f_id_order;
+
+        return f_sum;
+    end;
+
+end pack_zs1;
+
+begin
+    pack_zs1.proc_insert_all();
 end;
 
+select pack_zs1.fun_get_order_total(1) from dual;
 
+
+select pack_zs1.fun_get_order_count_by_customer(1) from dual;
+
+drop trigger t_productcode_to_upper;
+create or replace trigger t_productcode_to_upper
+    before insert on zs1_products for each row
+    begin
+        :new.productcode:=upper(:new.productcode);
+    end;
+
+insert into zs1_products (productcode, productline, msrp) values ('pb_12345', 'PB Series', 123);
+commit;
+
+select count(*) as tempcount from temp;
+
+select count(*) as prodcount from zs1_products;
+
+select count(*) as ordcount from zs1_orders;
+
+select count(*) as oredetcount from zs1_order_details;
+
+select count(*) as custcount from zs1_customers;
+
+
+
+DROP TABLE zs1_order_details CASCADE CONSTRAINTS;
+DROP TABLE zs1_orders CASCADE CONSTRAINTS;
+DROP TABLE zs1_products CASCADE CONSTRAINTS;
+DROP TABLE zs1_customers CASCADE CONSTRAINTS;
+
+DROP SEQUENCE seq_prod;
+CREATE SEQUENCE seq_prod START WITH 1;
