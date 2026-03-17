@@ -3,8 +3,8 @@ create table sales_info
     saleinfo_id number primary key,
     orderdate date,
     shipdate date,
-    order_day_name     varchar2(10),
-    ship_day_name     varchar2(10),
+    order_day_name     varchar2(13),
+    ship_day_name     varchar2(13),
     order_day_of_week  number,
     ship_day_of_week  number,
     order_day_of_month number,
@@ -26,6 +26,7 @@ create table sales_info
     order_year_number  number,
     ship_year_number  number
 );
+drop table sales_info;
 
 create sequence s_saleInfo;
 
@@ -40,8 +41,8 @@ create or replace procedure insert_sale_info is
         select distinct orderdate, shipdate
         from ORDERS;
 
-    begin
-        for i in c1 loop
+begin
+    for i in c1 loop
 
             insert into sales_info (orderdate, shipdate, order_day_name, ship_day_name, order_day_of_week,
                                     ship_day_of_week, order_day_of_month, ship_day_of_month, order_year_month,
@@ -50,15 +51,23 @@ create or replace procedure insert_sale_info is
                                     ship_month_name, order_month_number, ship_month_number, order_quarter,
                                     ship_quarter, order_year_number, ship_year_number)
             values (i.ORDERDATE, i.SHIPDATE,
-                    to_char(i.orderdate, 'Day'), to_char(i.SHIPDATE, 'Day'),
-                    to_char(i.ORDERDATE, 'D'), to_char(i.SHIPDATE, 'D'),
-                    extract(day from i.ORDERDATE),
-                    extract(day from i.SHIPDATE),
-                    to_char(i.ORDERDATE, 'YYYY-MM'),
-                    to_char(i.SHIPDATE, 'YYYY-MM'),
-                    to_char(i.ORDERDATE, 'IW'),
-                    to_char(i.SHIPDATE, 'IW'),
-                    to_char(i.)
-                   )
+                    trim(to_char(i.ORDERDATE, 'Day')), trim(to_char(i.SHIPDATE, 'Day')),
+                    to_number(to_char(i.ORDERDATE, 'D')), to_number(to_char(i.SHIPDATE, 'D')),
+                    extract(day from i.ORDERDATE), extract(day from i.SHIPDATE),
+                    to_char(i.ORDERDATE, 'YYYY-MM'), to_char(i.SHIPDATE, 'YYYY-MM'),
+                    to_number(to_char(i.ORDERDATE, 'IW')), to_number(to_char(i.SHIPDATE, 'IW')),
+                    to_number(to_char(i.ORDERDATE, 'DDD')), to_number(to_char(i.SHIPDATE, 'DDD')),
+                    case when to_char(i.ORDERDATE, 'DY', 'NLS_DATE_LANGUAGE=ENGLISH') in ('SAT', 'SUN') then 1 else 0 end,
+                    case when to_char(i.SHIPDATE, 'DY', 'NLS_DATE_LANGUAGE=ENGLISH') in ('SAT', 'SUN') then 1 else 0 end,
+                    trim(to_char(i.ORDERDATE, 'Month')), trim(to_char(i.SHIPDATE, 'Month')),
+                    extract(month from i.ORDERDATE), extract(month from i.SHIPDATE),
+                    to_number(to_char(i.ORDERDATE, 'Q')), to_number(to_char(i.SHIPDATE, 'Q')),
+                    extract(year from i.ORDERDATE), extract(year from i.SHIPDATE)
+                   );
         end loop;
-    end;
+    commit;
+end;
+
+begin
+    insert_sale_info();
+end;
