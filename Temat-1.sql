@@ -164,7 +164,7 @@ exception
     when NO_DATA_FOUND then
         return null;
 end;
-
+0
 select fun_calc_sale('FL')
 from dual;
 
